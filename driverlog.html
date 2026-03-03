@@ -19,13 +19,16 @@ body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; 
 
 /* Action Buttons & File Upload */
 .actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.left-actions { display: flex; align-items: center; gap: 10px; }
 .right-actions { display: flex; align-items: center; gap: 15px; }
+
 .btn { padding: 10px 20px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
+.btn-sm { padding: 6px 12px; font-size: 12px; } 
 
 /* Specific Button Colors */
 .btn-primary { background-color: #0056b3; }
 .btn-primary:hover { background-color: #004494; }
-.btn-refresh { padding: 10px; display: flex; align-items: center; justify-content: center; background-color: #6c757d; }
+.btn-refresh { padding: 6px; display: flex; align-items: center; justify-content: center; background-color: #6c757d; }
 .btn-refresh:hover { background-color: #5a6268; }
 .btn-clear { background-color: #dc3545; }
 .btn-clear:hover { background-color: #c82333; }
@@ -129,8 +132,8 @@ line-height: 1.2;
 body { background-color: white; margin: 0; }
 .container { box-shadow: none; border: none; max-width: 100%; padding: 0; }
 .no-print { display: none !important; }
-input:not([type="checkbox"]), select { border: none !important; border-bottom: 1px solid #000 !important; border-radius: 0; background-color: transparent !important; padding: 0; appearance: none; -webkit-appearance: none; box-shadow: none; font-weight: bold !important; }
-#date { border-bottom: none !important; color: red !important; }
+input:not([type="checkbox"]), select { border: none !important; border-bottom: 1px solid #000 !important; border-radius: 0; background-color: transparent !important; padding: 0; appearance: none; -webkit-appearance: none; box-shadow: none; font-weight: bold !important; color: black; }
+#date { border-bottom: none !important; }
 .form-group { flex-direction: column-reverse; }
 .form-group label { font-size: 11px; font-weight: normal; margin-top: 4px; margin-bottom: 0; }
 input::placeholder { color: transparent; }
@@ -146,6 +149,17 @@ canvas { border: none !important; }
 .checkbox-group input[type="checkbox"] { display: none; }
 .checkbox-group label::before { content: '☐ '; font-size: 16px; margin-right: 4px; }
 .checkbox-group input[type="checkbox"]:checked + label::before { content: '☑ '; }
+
+/* Forces fluorescent yellow highlight on labels of empty fields when printing */
+.print-warning-highlight {
+background-color: yellow !important;
+color: black !important;
+-webkit-print-color-adjust: exact;
+print-color-adjust: exact;
+padding: 2px 4px;
+border-radius: 2px;
+border: 1px solid #ccc;
+}
 }
 </style>
 </head>
@@ -156,21 +170,21 @@ canvas { border: none !important; }
 <div class="container">
 <div class="actions no-print">
 
-<button class="btn btn-refresh" type="button" onclick="window.location.reload()" title="Clear Form / Refresh">
-<svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+<div class="left-actions">
+<button class="btn btn-refresh btn-sm" type="button" onclick="window.location.reload()" title="Clear Form / Refresh">
+<svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
 <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
 <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
 </svg>
 </button>
+<button class="btn btn-warning btn-sm" type="button" onclick="printException()" title="Print log bypassing all missing information checks.">Print Exception</button>
+</div>
 
 <div class="right-actions">
-<button class="btn btn-warning" type="button" onclick="printException()" title="Print log bypassing all missing information checks.">Print Exception</button>
-
 <div class="file-upload-wrapper" id="dropZone">
 <button class="btn btn-upload">Upload or Drag PDF</button>
 <input type="file" id="pdfUpload" accept="application/pdf">
 </div>
-
 <button class="btn btn-primary" type="button" onclick="validateAndPrint()" title="Print two copies in Landscape view. Original filed each day at home terminal. Duplicate retained by driver for eight days.">Print Log</button>
 </div>
 </div>
@@ -200,7 +214,7 @@ canvas { border: none !important; }
 </div>
 <div class="form-group">
 <label for="empNum">Employee Number</label>
-<input type="number" id="empNum" min="1000" max="9999" placeholder="1000-9999" required>
+<input type="number" id="empNum" min="1000" max="99999" placeholder="1000-9999" required>
 </div>
 <div class="form-group">
 <label for="dutyNum">Duty Number</label>
@@ -290,6 +304,43 @@ if (day.length < 2) day = '0' + day;
 let todayStr = [year, month, day].join('-');
 
 document.getElementById('date').setAttribute('max', todayStr);
+});
+
+// --- Empty Field Print Formatting Logic ---
+window.addEventListener('beforeprint', () => {
+const dateInput = document.getElementById('date');
+
+// Hide the mm/dd/yyyy placeholder if date is empty
+if (!dateInput.value) {
+dateInput.type = 'text'; 
+dateInput.value = '';
+}
+
+// Apply fluorescent yellow highlight to labels of ANY empty required field
+const requiredFields = document.querySelectorAll('input[required], select[required]');
+requiredFields.forEach(field => {
+if (!field.value.trim()) {
+let label = document.querySelector(`label[for="${field.id}"]`);
+if (label) label.classList.add('print-warning-highlight');
+}
+});
+});
+
+window.addEventListener('afterprint', () => {
+const dateInput = document.getElementById('date');
+
+// Restore standard date picker behavior
+if (dateInput.type === 'text') {
+dateInput.type = 'date'; 
+dateInput.value = '';
+}
+
+// Remove the yellow highlights
+const requiredFields = document.querySelectorAll('input[required], select[required]');
+requiredFields.forEach(field => {
+let label = document.querySelector(`label[for="${field.id}"]`);
+if (label) label.classList.remove('print-warning-highlight');
+});
 });
 
 const canvasConfig = {
@@ -746,10 +797,11 @@ let fullText = textItems.join(" ");
 let dateMatch = fullText.match(/Date:\s*(\d{4}\/\d{2}\/\d{2})/i);
 if (dateMatch) document.getElementById('date').value = dateMatch[1].replace(/\//g, '-');
 
-let dutyMatch = fullText.match(/Duty\s*#[^\d]*(\d+(?:\+\d+)?)/i);
+// NEW: Bulletproof Duty Extraction. Skips all column names in the table header entirely to find the true duty string.
+let dutyMatch = fullText.match(/Duty\s*#(?:[\s\-\/\|]*(?:Time-?In|Signature|Duty|List|Division:?|MST|TDA|CJW|SCO|SBB|Time-?out|REG|SBT|SRB|RDO))*\s*([A-Z0-9]+(?:\+[A-Z0-9]+)?)/i);
 if (dutyMatch) document.getElementById('dutyNum').value = dutyMatch[1];
 
-let empMatch = fullText.match(/(\d{4})\s*-\s*([A-Za-z]+)\s+([A-Za-z]+)/);
+let empMatch = fullText.match(/(\d{3,6})\s*-\s*([A-Za-z]+)\s+([A-Za-z]+)/);
 let empId = "";
 if (empMatch) {
 empId = empMatch[1];
@@ -762,9 +814,9 @@ alert("Could not locate driver information in the document.");
 return;
 }
 
-// Location Mapping logic for To/From fields
-let cityMap = { 'CJW': 'Salinas', 'SCO': 'King City', 'TDA': 'Monterey' };
-let locationMatches = fullText.match(/\b(CJW|SCO|TDA)\b/gi);
+// Location Mapping logic for To/From fields (SBB appended for King City)
+let cityMap = { 'CJW': 'Salinas', 'SCO': 'King City', 'TDA': 'Monterey', 'SBB': 'King City' };
+let locationMatches = fullText.match(/\b(CJW|SCO|TDA|SBB)\b/gi);
 let defaultCity = "Monterey";
 
 if (locationMatches && locationMatches.length > 0) {
@@ -790,7 +842,7 @@ let vehicles = new Set();
 
 isGridManuallyCleared = false;
 driverEvents = [];
-remarksMarkers = []; // Clears markers on new import
+remarksMarkers = [];
 
 function parseTime(timeStr) {
 let match = timeStr.match(/(\d{1,2})(\d{2})([ap])/);
@@ -812,15 +864,16 @@ if (!times || times.length < 2) return;
 let start = times[0];
 let end = times[1];
 
-// Track active city context for auto-generating markers
-let rowLocMatch = row.match(/\b(CJW|SCO|TDA)\b/i);
+// Track active city context including SBB
+let rowLocMatch = row.match(/\b(CJW|SCO|TDA|SBB)\b/i);
 if (rowLocMatch) {
 lastCityName = cityMap[rowLocMatch[1].toUpperCase()] || lastCityName;
 }
 
 let beforeTime = row.split(start)[0];
 
-let possibleVehicles = beforeTime.match(/\b\d{4}\b/g);
+// Allow 2-5 digit bus matching to prevent failures on short/long bus formats
+let possibleVehicles = beforeTime.match(/\b\d{2,5}\b/g);
 if (possibleVehicles) {
 possibleVehicles.forEach(num => {
 if (num === empId) return; 
@@ -842,7 +895,7 @@ vehicles.add(num);
 let lowerRow = row.toLowerCase();
 let status = "DRIVE"; 
 
-let isReliefUnit = /\b(tda|cjw|sco)\s*-\s*\d+\b/i.test(lowerRow);
+let isReliefUnit = /\b(tda|cjw|sco|sbb)\s*-\s*\d+\b/i.test(lowerRow);
 
 if (lowerRow.includes("unpaid")) {
 status = "OFF";
@@ -877,18 +930,15 @@ driverEvents.push({ status: status, startHour: startDec, endHour: endDec, city: 
 if (vehicles.size > 0) document.getElementById('vehicleNum').value = Array.from(vehicles).join(", ");
 document.getElementById('totalMiles').value = totalMiles.toFixed(1); 
 
-// --- Auto-generate ON Duty City/State Markers ---
 let lastStatus = 'OFF';
 let lastEndHour = 0;
 
 driverEvents.forEach(ev => {
-// Detect explicit OFF periods or implicit Gaps in the parsed events
 if (ev.startHour > lastEndHour + 0.02) {
 lastStatus = 'OFF'; 
 }
 
 if (ev.status === 'ON' && lastStatus !== 'ON') {
-// Prevent duplicate overlapping markers
 let exists = remarksMarkers.some(m => Math.abs(m.time - ev.startHour) < 0.05);
 if (!exists) {
 remarksMarkers.push({ time: ev.startHour, city: ev.city + ', CA' });
@@ -898,7 +948,6 @@ lastStatus = ev.status;
 lastEndHour = ev.endHour;
 });
 
-// Auto Check Passengers
 document.getElementById('chkPassengers').checked = true;
 document.getElementById('remarksContainer').style.borderColor = '#ccc';
 
@@ -936,7 +985,6 @@ document.getElementById('remarksContainer').style.borderColor = '#ccc';
 });
 });
 
-// Bypasses validation so drivers can print missing info to finish by hand
 function printException() {
 alert("Printing exception copy. Missing fields will need to be completed by hand.\n\nOriginal filed each day at home terminal.\nDuplicate retained by driver for eight days.");
 window.print();
