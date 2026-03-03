@@ -20,16 +20,19 @@ body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; 
 /* Action Buttons & File Upload */
 .actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .right-actions { display: flex; align-items: center; gap: 15px; }
-.btn { padding: 10px 20px; background-color: #0056b3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
-.btn:hover { background-color: #004494; }
+.btn { padding: 10px 20px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
 
 /* Specific Button Colors */
+.btn-primary { background-color: #0056b3; }
+.btn-primary:hover { background-color: #004494; }
 .btn-refresh { padding: 10px; display: flex; align-items: center; justify-content: center; background-color: #6c757d; }
 .btn-refresh:hover { background-color: #5a6268; }
 .btn-clear { background-color: #dc3545; }
 .btn-clear:hover { background-color: #c82333; }
 .btn-upload { background-color: #28a745; }
 .btn-upload:hover { background-color: #218838; }
+.btn-warning { background-color: #ffc107; color: #212529; }
+.btn-warning:hover { background-color: #e0a800; }
 
 .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; border-radius: 4px; }
 .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
@@ -161,11 +164,14 @@ canvas { border: none !important; }
 </button>
 
 <div class="right-actions">
+<button class="btn btn-warning" type="button" onclick="printException()" title="Print log bypassing all missing information checks.">Print Exception</button>
+
 <div class="file-upload-wrapper" id="dropZone">
 <button class="btn btn-upload">Upload or Drag PDF</button>
 <input type="file" id="pdfUpload" accept="application/pdf">
 </div>
-<button class="btn" type="button" onclick="validateAndPrint()" title="Print two copies in Landscape view. Original filed each day at home terminal. Duplicate retained by driver for eight days.">Print Log</button>
+
+<button class="btn btn-primary" type="button" onclick="validateAndPrint()" title="Print two copies in Landscape view. Original filed each day at home terminal. Duplicate retained by driver for eight days.">Print Log</button>
 </div>
 </div>
 
@@ -344,6 +350,7 @@ ctx.fillStyle = '#000';
 ctx.textAlign = 'right';
 ctx.textBaseline = 'middle';
 
+// Grid Rows
 for (let i = 0; i <= numRows; i++) {
 const y = topMargin + (i * rowHeight);
 if (i < numRows) {
@@ -477,6 +484,7 @@ ctx.restore();
 
 window.onload = drawGridAndLine;
 
+// --- Interactive Graph Logic ---
 const canvas = document.getElementById('logGrid');
 const tooltip = document.getElementById('timeTooltip');
 const canvasWrapper = document.getElementById('canvasWrapper');
@@ -754,6 +762,27 @@ alert("Could not locate driver information in the document.");
 return;
 }
 
+// Location Mapping logic for To/From fields
+let cityMap = { 'CJW': 'Salinas', 'SCO': 'King City', 'TDA': 'Monterey' };
+let locationMatches = fullText.match(/\b(CJW|SCO|TDA)\b/gi);
+let defaultCity = "Monterey";
+
+if (locationMatches && locationMatches.length > 0) {
+let firstLoc = locationMatches[0].toUpperCase();
+let lastLoc = locationMatches[locationMatches.length - 1].toUpperCase();
+document.getElementById('fromCity').value = cityMap[firstLoc] || firstLoc;
+document.getElementById('toCity').value = cityMap[lastLoc] || lastLoc;
+
+let termSelect = document.getElementById('homeTerminal');
+for(let i=0; i<termSelect.options.length; i++) {
+if(termSelect.options[i].value === firstLoc) {
+termSelect.selectedIndex = i;
+break;
+}
+}
+defaultCity = cityMap[firstLoc] || defaultCity;
+}
+
 let rowSplitRegex = new RegExp("(?=" + empId + "\\b)", "g");
 let rows = fullText.split(rowSplitRegex);
 let totalMiles = 0.0;
@@ -761,6 +790,7 @@ let vehicles = new Set();
 
 isGridManuallyCleared = false;
 driverEvents = [];
+remarksMarkers = []; // Clears markers on new import
 
 function parseTime(timeStr) {
 let match = timeStr.match(/(\d{1,2})(\d{2})([ap])/);
@@ -773,12 +803,20 @@ if (!isPm && hrs === 12) hrs = 0;
 return hrs + (mins / 60);
 }
 
+let lastCityName = defaultCity;
+
 rows.forEach(row => {
 let times = row.match(/(\d{1,2}\d{2}[ap])/g);
 if (!times || times.length < 2) return; 
 
 let start = times[0];
 let end = times[1];
+
+// Track active city context for auto-generating markers
+let rowLocMatch = row.match(/\b(CJW|SCO|TDA)\b/i);
+if (rowLocMatch) {
+lastCityName = cityMap[rowLocMatch[1].toUpperCase()] || lastCityName;
+}
 
 let beforeTime = row.split(start)[0];
 
@@ -804,7 +842,6 @@ vehicles.add(num);
 let lowerRow = row.toLowerCase();
 let status = "DRIVE"; 
 
-// STRICT RU matching: requires a hyphen to prevent matching timecodes like "CJW 542p"
 let isReliefUnit = /\b(tda|cjw|sco)\s*-\s*\d+\b/i.test(lowerRow);
 
 if (lowerRow.includes("unpaid")) {
@@ -824,7 +861,6 @@ status = "ON";
 status = "DRIVE";
 }
 
-// Extract mileage if it is NOT a relief unit
 if (!isReliefUnit) {
 let milesMatch = row.match(/(\d+\.\d{3,4})/g);
 if (milesMatch) totalMiles += parseFloat(milesMatch[milesMatch.length - 1]);
@@ -835,13 +871,36 @@ let endDec = parseTime(end);
 let duration = endDec - startDec;
 if (duration < 0) duration += 24; 
 
-driverEvents.push({ status: status, startHour: startDec, endHour: endDec });
+driverEvents.push({ status: status, startHour: startDec, endHour: endDec, city: lastCityName });
 });
 
 if (vehicles.size > 0) document.getElementById('vehicleNum').value = Array.from(vehicles).join(", ");
-
-// Use standard rounding to 1 decimal place to match typical UI requirements
 document.getElementById('totalMiles').value = totalMiles.toFixed(1); 
+
+// --- Auto-generate ON Duty City/State Markers ---
+let lastStatus = 'OFF';
+let lastEndHour = 0;
+
+driverEvents.forEach(ev => {
+// Detect explicit OFF periods or implicit Gaps in the parsed events
+if (ev.startHour > lastEndHour + 0.02) {
+lastStatus = 'OFF'; 
+}
+
+if (ev.status === 'ON' && lastStatus !== 'ON') {
+// Prevent duplicate overlapping markers
+let exists = remarksMarkers.some(m => Math.abs(m.time - ev.startHour) < 0.05);
+if (!exists) {
+remarksMarkers.push({ time: ev.startHour, city: ev.city + ', CA' });
+}
+}
+lastStatus = ev.status;
+lastEndHour = ev.endHour;
+});
+
+// Auto Check Passengers
+document.getElementById('chkPassengers').checked = true;
+document.getElementById('remarksContainer').style.borderColor = '#ccc';
 
 updateHoursFromEvents(); 
 document.querySelectorAll('input[required]').forEach(el => el.style.borderColor = '#ccc');
@@ -876,6 +935,12 @@ cb.addEventListener('change', () => {
 document.getElementById('remarksContainer').style.borderColor = '#ccc';
 });
 });
+
+// Bypasses validation so drivers can print missing info to finish by hand
+function printException() {
+alert("Printing exception copy. Missing fields will need to be completed by hand.\n\nOriginal filed each day at home terminal.\nDuplicate retained by driver for eight days.");
+window.print();
+}
 
 function validateAndPrint() {
 const requiredFields = document.querySelectorAll('input[required], select[required]');
@@ -929,4 +994,4 @@ window.print();
 </script>
 
 </body>
-</html>  
+</html>
