@@ -1,0 +1,935 @@
+layout: page
+title: "FMCSA Transit Driver Log"
+permalink: /URL-PATH
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local FMCSA Driver Log - MST</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>
+// Disable worker to prevent Safari CORS/Security errors when running as a local HTML file
+pdfjsLib.GlobalWorkerOptions.disableWorker = true;
+</script>
+
+<style>
+/* Print Orientation */
+@page { size: landscape; margin: 0.5in; }
+body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+.container { max-width: 1050px; margin: auto; background: white; padding: 20px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative;}
+
+/* Action Buttons & File Upload */
+.actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.right-actions { display: flex; align-items: center; gap: 15px; }
+.btn { padding: 10px 20px; background-color: #0056b3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
+.btn:hover { background-color: #004494; }
+
+/* Specific Button Colors */
+.btn-refresh { padding: 10px; display: flex; align-items: center; justify-content: center; background-color: #6c757d; }
+.btn-refresh:hover { background-color: #5a6268; }
+.btn-clear { background-color: #dc3545; }
+.btn-clear:hover { background-color: #c82333; }
+.btn-upload { background-color: #28a745; }
+.btn-upload:hover { background-color: #218838; }
+
+.file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; border-radius: 4px; }
+.file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
+
+/* Drag & Drop Hover State */
+.drag-over .btn-upload {
+background-color: #218838;
+box-shadow: 0 0 0 4px rgba(40, 167, 69, 0.4);
+}
+
+/* Top Header Layout */
+.top-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+
+/* Title Grouping */
+.title-group { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
+.title-group h2 { margin: 0; padding: 0; border: none; text-align: center; text-transform: uppercase; }
+.sub-title { font-size: 10px; font-weight: normal; margin-top: 4px; text-transform: uppercase; }
+
+.date-group { display: flex; flex-direction: column; width: 130px; }
+.date-group label { font-weight: normal; font-size: 11px; margin-bottom: 2px; }
+.carrier-info { text-align: right; display: flex; flex-direction: column; }
+.carrier-label { font-size: 10px; color: #555; margin-bottom: 2px; }
+.carrier-name { font-weight: bold; font-size: 16px; }
+.carrier-address { font-size: 12px; color: #333; margin-top: 2px; }
+
+/* Form Layout */
+.form-layout { display: flex; flex-wrap: wrap; gap: 15px 25px; margin-bottom: 30px; }
+.form-group { display: flex; flex-direction: column; }
+.form-layout label { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
+input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; transition: background-color 0.3s; }
+input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+/* Warning Highlight Class */
+.warning-field { background-color: #fff3cd !important; border-color: red !important; }
+
+#date { width: 100%; } 
+#driverName { width: 28ch; } 
+#empNum, #dutyNum { width: 110px; } 
+#vehicleNum { width: 160px; }
+#totalMiles { width: 100px; } 
+#fromCity, #toCity { width: 20ch; }
+#homeTerminal { width: 49ch; } 
+
+/* Log Grid */
+.log-section { display: flex; align-items: stretch; justify-content: center; gap: 20px; margin-top: 20px; overflow-x: auto; }
+.canvas-wrapper { border: 1px solid #333; padding: 30px 40px; background-color: #fff; border-radius: 4px; transition: background-color 0.3s, border-color 0.3s; }
+canvas { border: none; touch-action: none; display: block; } 
+
+/* Hours Column */
+.hours-column { width: 100px; display: flex; flex-direction: column; }
+.hours-header { height: 20px; text-align: center; font-weight: bold; font-size: 14px; line-height: 20px; margin-top: 30px;} 
+.hours-inputs { height: 150px; display: flex; flex-direction: column; border-top: 1px solid #333; border-left: 1px solid #333; border-right: 1px solid #333; background-color: #fff; }
+.hour-cell { flex: 1; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #333; }
+.hour-input { width: 80%; text-align: center; border: none; outline: none; font-size: 14px; }
+.hours-total-container { display: flex; justify-content: center; gap: 8px; align-items: center; margin-top: 10px; font-weight: bold; font-size: 14px; }
+#hrsTotal { width: 45px; text-align: right; border: none; background: transparent; font-weight: bold; font-size: 14px; color: red; }
+
+/* Clear Grid Button */
+.btn-clear-grid {
+background-color: #dc3545;
+color: white;
+border: none;
+border-radius: 4px;
+cursor: pointer;
+font-size: 12px;
+font-weight: bold;
+padding: 8px 4px;
+text-align: center;
+width: 100%;
+margin-top: auto; 
+box-sizing: border-box;
+white-space: normal; 
+line-height: 1.2;
+}
+.btn-clear-grid:hover { background-color: #c82333; }
+
+/* Bottom Row */
+.bottom-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; gap: 20px; }
+.remarks-section { flex: 1; padding: 15px; background-color: #fff; border: 1px solid #ccc; border-radius: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 15px; transition: border-color 0.3s;}
+.remarks-section label.title { font-weight: bold; font-size: 14px; margin-right: 10px; }
+.checkbox-group { display: flex; align-items: center; gap: 5px; font-size: 14px; }
+.checkbox-group input[type="text"] { margin-left: 5px; width: 200px; padding: 4px 8px; }
+.signature-section { width: 300px; display: flex; flex-direction: column; }
+.signature-line { border-bottom: 1px solid #000; height: 30px; }
+.signature-label { font-weight: bold; font-size: 12px; margin-top: 4px; text-align: center; }
+.cert-label { font-weight: normal; font-size: 10px; margin-top: 2px; text-align: center; font-style: italic; }
+
+/* Tooltip */
+#timeTooltip { position: absolute; display: none; background: rgba(0,0,0,0.8); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; pointer-events: none; z-index: 1000; white-space: nowrap; }
+
+/* --- PRINT STYLES --- */
+@media print {
+body { background-color: white; margin: 0; }
+.container { box-shadow: none; border: none; max-width: 100%; padding: 0; }
+.no-print { display: none !important; }
+input:not([type="checkbox"]), select { border: none !important; border-bottom: 1px solid #000 !important; border-radius: 0; background-color: transparent !important; padding: 0; appearance: none; -webkit-appearance: none; box-shadow: none; font-weight: bold !important; }
+#date { border-bottom: none !important; color: red !important; }
+.form-group { flex-direction: column-reverse; }
+.form-group label { font-size: 11px; font-weight: normal; margin-top: 4px; margin-bottom: 0; }
+input::placeholder { color: transparent; }
+input[type="date"]::-webkit-calendar-picker-indicator { display: none; }
+.canvas-wrapper { border: none !important; padding: 0 !important; background-color: transparent !important; }
+canvas { border: none !important; }
+.hours-header { margin-top: 0; }
+.hours-inputs { border: 1px solid #000; }
+.hour-cell { border-bottom: 1px solid #000; }
+.hour-input { border: none !important; }
+#hrsTotal { border-bottom: none !important; color: black !important; }
+.remarks-section { border: 1px solid #000 !important; }
+.checkbox-group input[type="checkbox"] { display: none; }
+.checkbox-group label::before { content: '☐ '; font-size: 16px; margin-right: 4px; }
+.checkbox-group input[type="checkbox"]:checked + label::before { content: '☑ '; }
+}
+</style>
+</head>
+<body>
+
+<div id="timeTooltip" class="no-print"></div>
+
+<div class="container">
+<div class="actions no-print">
+
+<button class="btn btn-refresh" type="button" onclick="window.location.reload()" title="Clear Form / Refresh">
+<svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+<path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+<path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+</svg>
+</button>
+
+<div class="right-actions">
+<div class="file-upload-wrapper" id="dropZone">
+<button class="btn btn-upload">Upload or Drag PDF</button>
+<input type="file" id="pdfUpload" accept="application/pdf">
+</div>
+<button class="btn" type="button" onclick="validateAndPrint()" title="Print two copies in Landscape view. Original filed each day at home terminal. Duplicate retained by driver for eight days.">Print Log</button>
+</div>
+</div>
+
+<div class="top-header">
+<div class="date-group">
+<label for="date">Date</label>
+<input type="date" id="date" required>
+</div>
+
+<div class="title-group">
+<h2>Driver's Daily Log</h2>
+<div class="sub-title">(ONE CALENDAR DAY - 24 HOURS)</div>
+</div>
+
+<div class="carrier-info">
+<div class="carrier-label">Carrier Name and Main Office Address:</div>
+<div class="carrier-name">Monterey-Salinas Transit District</div>
+<div class="carrier-address">19 Upper Ragsdale Drive, Suite 200, Monterey, CA 93940</div>
+</div>
+</div>
+
+<div class="form-layout">
+<div class="form-group">
+<label for="driverName">Driver Name</label>
+<input type="text" id="driverName" placeholder="First Last" required>
+</div>
+<div class="form-group">
+<label for="empNum">Employee Number</label>
+<input type="number" id="empNum" min="1000" max="9999" placeholder="1000-9999" required>
+</div>
+<div class="form-group">
+<label for="dutyNum">Duty Number</label>
+<input type="text" id="dutyNum" required>
+</div>
+<div class="form-group">
+<label for="vehicleNum">Vehicle Number(s)</label>
+<input type="text" id="vehicleNum" placeholder="e.g., 2201, 1901" required>
+</div>
+<div class="form-group">
+<label for="totalMiles">Total Miles Driven</label>
+<input type="number" id="totalMiles" min="0" max="999" step="0.1" placeholder="e.g., 150" required>
+</div>
+<div class="form-group">
+<label for="fromCity">From (Tap In City)</label>
+<input type="text" id="fromCity" value="Monterey" required>
+</div>
+<div class="form-group">
+<label for="toCity">To (Tap Out City)</label>
+<input type="text" id="toCity" value="Monterey" required>
+</div>
+<div class="form-group">
+<label for="homeTerminal">Home Terminal Address</label>
+<select id="homeTerminal" required>
+<option value="TDA">TDA / 1 Ryan Ranch Rd. Monterey, CA 93940</option>
+<option value="CJW">CJW / 443 Victor Way, Salinas, CA 93907</option>
+<option value="SCO">SCO / 179 San Antonio Dr., King City, CA 93930</option>
+</select>
+</div>
+</div>
+
+<div class="log-section">
+<div class="canvas-wrapper" id="canvasWrapper">
+<canvas id="logGrid" width="800" height="320"></canvas>
+</div>
+<div class="hours-column">
+<div class="hours-header">Hours</div>
+<div class="hours-inputs">
+<div class="hour-cell"><input type="number" id="hrsOffDuty" class="hour-input" step="0.01" placeholder="0.00" required></div>
+<div class="hour-cell"><input type="number" id="hrsDriving" class="hour-input" step="0.01" placeholder="0.00" required></div>
+<div class="hour-cell"><input type="number" id="hrsOnDuty" class="hour-input" step="0.01" placeholder="0.00" required></div>
+</div>
+<div class="hours-total-container">
+<span>Total</span>
+<input type="text" id="hrsTotal" value="0.00" readonly>
+</div>
+
+<button class="btn-clear-grid no-print" type="button" onclick="clearGrid()" title="Clear the grid to draw lines by hand">Clear Grid</button>
+</div>
+</div>
+
+<div class="bottom-row">
+<div class="remarks-section" id="remarksContainer">
+<label class="title">Remarks:</label>
+<div class="checkbox-group">
+<input type="checkbox" id="chkPassengers">
+<label for="chkPassengers">Passengers</label>
+</div>
+<div class="checkbox-group">
+<input type="checkbox" id="chkStandby">
+<label for="chkStandby">Standby</label>
+</div>
+<div class="checkbox-group">
+<input type="checkbox" id="chkOther">
+<label for="chkOther">Other</label>
+<input type="text" id="otherText" placeholder="Please specify...">
+</div>
+</div>
+<div class="signature-section">
+<div class="signature-line"></div>
+<div class="signature-label">Driver's Signature</div>
+<div class="cert-label">I certify these entries are true and correct.</div>
+</div>
+</div>
+</div>
+
+<script>
+let driverEvents = []; 
+let remarksMarkers = []; 
+let isGridManuallyCleared = false;
+
+window.addEventListener('DOMContentLoaded', () => {
+let d = new Date();
+let month = '' + (d.getMonth() + 1), day = '' + d.getDate(), year = d.getFullYear();
+if (month.length < 2) month = '0' + month;
+if (day.length < 2) day = '0' + day;
+let todayStr = [year, month, day].join('-');
+
+document.getElementById('date').setAttribute('max', todayStr);
+});
+
+const canvasConfig = {
+leftMargin: 100,
+topMargin: 20,
+gridHeight: 150,
+get gridWidth() { return 800 - this.leftMargin - 10; },
+get gridBottom() { return this.topMargin + this.gridHeight; },
+get remarksLineY() { return this.gridBottom + 25; }
+};
+
+function getStatusY(status) {
+const rowHeight = canvasConfig.gridHeight / 3;
+if (status === 'OFF') return canvasConfig.topMargin + (rowHeight * 0.5);
+if (status === 'DRIVE') return canvasConfig.topMargin + (rowHeight * 1.5);
+if (status === 'ON') return canvasConfig.topMargin + (rowHeight * 2.5);
+return canvasConfig.topMargin + (rowHeight * 0.5);
+}
+
+function formatTime(decimalHours) {
+if (decimalHours < 0) decimalHours = 0;
+if (decimalHours > 24) decimalHours = 24;
+let hrs = Math.floor(decimalHours);
+let mins = Math.round((decimalHours - hrs) * 60);
+if (mins === 60) { hrs++; mins = 0; }
+let ampm = hrs >= 12 && hrs < 24 ? 'PM' : 'AM';
+let dispHrs = hrs % 12;
+if (dispHrs === 0) dispHrs = 12;
+let dispMins = mins.toString().padStart(2, '0');
+return `${dispHrs}:${dispMins} ${ampm}`;
+}
+
+function clearGrid() {
+if (confirm("Are you sure you want to clear the grid? The grid will print blank so you can draw your log by hand. Your form data and hours will be kept.")) {
+driverEvents = [];
+remarksMarkers = [];
+isGridManuallyCleared = true;
+drawGridAndLine();
+
+canvasWrapper.classList.remove('warning-field');
+canvasWrapper.style.borderColor = '#333';
+canvasWrapper.style.backgroundColor = '#fff';
+}
+}
+
+function drawGridAndLine() {
+const canvas = document.getElementById('logGrid');
+const ctx = canvas.getContext('2d');
+ctx.clearRect(0, 0, canvas.width, canvas.height); 
+
+const { leftMargin, topMargin, gridWidth, gridHeight, gridBottom, remarksLineY } = canvasConfig;
+const labels = ['OFF DUTY', 'DRIVING', 'ON DUTY'];
+const numRows = labels.length;
+const rowHeight = gridHeight / numRows;
+
+ctx.font = '14px Arial';
+ctx.fillStyle = '#000';
+ctx.textAlign = 'right';
+ctx.textBaseline = 'middle';
+
+for (let i = 0; i <= numRows; i++) {
+const y = topMargin + (i * rowHeight);
+if (i < numRows) {
+if (labels[i] === 'ON DUTY') {
+ctx.fillText('ON DUTY', leftMargin - 10, y + (rowHeight / 2) - 10);
+ctx.font = '9px Arial'; 
+ctx.fillText('(SB/PRE-TRIP/', leftMargin - 10, y + (rowHeight / 2) + 4);
+ctx.fillText('RU/ETC.)', leftMargin - 10, y + (rowHeight / 2) + 14);
+ctx.font = '14px Arial'; 
+} else if (labels[i] === 'DRIVING') {
+ctx.fillText('DRIVING', leftMargin - 10, y + (rowHeight / 2) - 6);
+ctx.font = '10px Arial';
+ctx.fillText('(BUS ONLY)', leftMargin - 10, y + (rowHeight / 2) + 8);
+ctx.font = '14px Arial';
+} else {
+ctx.fillText(labels[i], leftMargin - 10, y + (rowHeight / 2));
+}
+}
+ctx.beginPath(); ctx.moveTo(leftMargin, y); ctx.lineTo(leftMargin + gridWidth, y); ctx.stroke();
+}
+
+const textY = gridBottom + 18; 
+ctx.textAlign = 'right'; ctx.fillText('REMARKS', leftMargin - 10, remarksLineY + 12);
+ctx.beginPath(); ctx.moveTo(leftMargin, remarksLineY); ctx.lineTo(leftMargin + gridWidth, remarksLineY); ctx.stroke();
+
+ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+const hourWidth = gridWidth / 24;
+for (let i = 0; i < 24; i++) {
+const x = leftMargin + (i * hourWidth);
+ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(x, topMargin); ctx.lineTo(x, gridBottom);
+ctx.lineWidth = (i === 0 || i === 12) ? 2 : 1; ctx.stroke(); ctx.lineWidth = 1; 
+ctx.beginPath(); ctx.moveTo(x, remarksLineY); ctx.lineTo(x, remarksLineY + 15); ctx.stroke();
+
+const x30 = x + (hourWidth / 2);
+ctx.setLineDash([4, 4]); ctx.strokeStyle = '#666'; ctx.beginPath(); ctx.moveTo(x30, topMargin); ctx.lineTo(x30, gridBottom); ctx.stroke();
+ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(x30, remarksLineY); ctx.lineTo(x30, remarksLineY + 10); ctx.stroke();
+
+ctx.setLineDash([]); ctx.strokeStyle = '#000';
+const x15 = x + (hourWidth * 0.25); const x45 = x + (hourWidth * 0.75); const tickLength = 8; 
+for(let j = 0; j <= numRows; j++) {
+const yLine = topMargin + (j * rowHeight);
+ctx.beginPath(); ctx.moveTo(x15, yLine - tickLength/2); ctx.lineTo(x15, yLine + tickLength/2); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(x45, yLine - tickLength/2); ctx.lineTo(x45, yLine + tickLength/2); ctx.stroke();
+}
+ctx.beginPath(); ctx.moveTo(x15, remarksLineY); ctx.lineTo(x15, remarksLineY + 6); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(x45, remarksLineY); ctx.lineTo(x45, remarksLineY + 6); ctx.stroke();
+
+let hourText = i === 0 ? '12a' : (i === 12 ? '12p' : (i > 12 ? i - 12 : i)); 
+ctx.fillText(hourText, x, topMargin - 4); ctx.fillText(hourText, x, textY);
+}
+
+const finalX = leftMargin + gridWidth;
+ctx.beginPath(); ctx.moveTo(finalX, topMargin); ctx.lineTo(finalX, gridBottom); ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
+ctx.beginPath(); ctx.moveTo(finalX, remarksLineY); ctx.lineTo(finalX, remarksLineY + 15); ctx.stroke();
+ctx.fillText('12a', finalX, topMargin - 4); ctx.fillText('12a', finalX, textY);
+
+ctx.save();
+ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; 
+ctx.font = 'italic 18px Arial';
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+ctx.fillText('Click to add City, State (CA) where each change of duty occurred', leftMargin + (gridWidth / 2), remarksLineY + 35);
+ctx.restore();
+
+if (driverEvents.length > 0) {
+ctx.lineWidth = 3;
+ctx.strokeStyle = '#0000FF'; 
+
+let lastX = leftMargin;
+let lastY = getStatusY('OFF'); 
+
+ctx.beginPath();
+ctx.moveTo(lastX, lastY);
+
+if (driverEvents[0].startHour > 0) {
+let currentX = leftMargin + (driverEvents[0].startHour / 24) * gridWidth;
+ctx.lineTo(currentX, lastY); 
+lastX = currentX;
+}
+
+for (let i = 0; i < driverEvents.length; i++) {
+let event = driverEvents[i];
+let currentY = getStatusY(event.status);
+let startX = leftMargin + (event.startHour / 24) * gridWidth;
+let endX = leftMargin + (event.endHour / 24) * gridWidth;
+
+if (currentY !== lastY) ctx.lineTo(startX, currentY); 
+ctx.lineTo(endX, currentY); 
+
+lastX = endX;
+lastY = currentY;
+
+if (i < driverEvents.length - 1 && driverEvents[i+1].startHour > event.endHour) {
+let offY = getStatusY('OFF');
+let nextStartX = leftMargin + (driverEvents[i+1].startHour / 24) * gridWidth;
+ctx.lineTo(endX, offY); 
+ctx.lineTo(nextStartX, offY); 
+lastY = offY;
+lastX = nextStartX;
+}
+}
+
+let finalOffY = getStatusY('OFF');
+if (lastX < finalX) {
+ctx.lineTo(lastX, finalOffY); 
+ctx.lineTo(finalX, finalOffY); 
+}
+
+ctx.stroke();
+ctx.lineWidth = 1; 
+}
+
+remarksMarkers.forEach(m => {
+let mx = leftMargin + (m.time / 24) * gridWidth;
+ctx.strokeStyle = '#0000FF';
+ctx.fillStyle = '#0000FF';
+ctx.beginPath();
+ctx.moveTo(mx, gridBottom);
+ctx.lineTo(mx, remarksLineY + 20);
+ctx.stroke();
+ctx.save();
+ctx.translate(mx, remarksLineY + 25);
+ctx.rotate(-Math.PI / 4); 
+ctx.textAlign = 'right';
+ctx.textBaseline = 'middle';
+ctx.font = 'bold 12px Arial';
+ctx.fillText(m.city, 0, 0);
+ctx.restore();
+});
+};
+
+window.onload = drawGridAndLine;
+
+const canvas = document.getElementById('logGrid');
+const tooltip = document.getElementById('timeTooltip');
+const canvasWrapper = document.getElementById('canvasWrapper');
+let isDragging = false;
+let dragTarget = null; 
+let dragType = null; 
+let startDragX = 0; 
+
+function getDragTarget(xTime, yPos) {
+let closestDist = 0.5; 
+let target = null;
+for (let i = 0; i < driverEvents.length; i++) {
+let ev = driverEvents[i];
+let evY = getStatusY(ev.status);
+if (Math.abs(yPos - evY) < 20) {
+let dStart = Math.abs(xTime - ev.startHour);
+let dEnd = Math.abs(xTime - ev.endHour);
+if (dStart < closestDist) {
+closestDist = dStart;
+target = { index: i, edge: 'start' };
+}
+if (dEnd < closestDist) {
+closestDist = dEnd;
+target = { index: i, edge: 'end' };
+}
+}
+}
+return target;
+}
+
+canvas.addEventListener('mousedown', function(e) {
+let rect = canvas.getBoundingClientRect();
+let x = e.clientX - rect.left;
+let y = e.clientY - rect.top;
+
+if (x < canvasConfig.leftMargin || x > canvasConfig.leftMargin + canvasConfig.gridWidth) return;
+let clickedTime = (x - canvasConfig.leftMargin) / (canvasConfig.gridWidth / 24);
+
+startDragX = x;
+
+if (y > canvasConfig.gridBottom) {
+let clickedMarkerIndex = remarksMarkers.findIndex(m => {
+let mx = canvasConfig.leftMargin + (m.time / 24) * canvasConfig.gridWidth;
+return x >= mx - 80 && x <= mx + 20 && y >= canvasConfig.remarksLineY;
+});
+
+if (clickedMarkerIndex !== -1) {
+isDragging = true;
+dragType = 'marker';
+dragTarget = clickedMarkerIndex;
+return;
+}
+
+let city = prompt("Enter City and State abbreviation (e.g., Monterey, CA) for " + formatTime(clickedTime) + ":");
+if (city) {
+let formatValid = /^[^,]+,\s*[A-Za-z]{2}$/.test(city.trim());
+if (formatValid) {
+remarksMarkers.push({ time: clickedTime, city: city.trim() });
+drawGridAndLine();
+canvasWrapper.classList.remove('warning-field');
+canvasWrapper.style.borderColor = '#333';
+canvasWrapper.style.backgroundColor = '#fff';
+} else {
+alert("Invalid format. Please enter the City and 2-letter State abbreviation separated by a comma (e.g., Monterey, CA).");
+}
+}
+return;
+}
+
+let target = getDragTarget(clickedTime, y);
+if (target) {
+isDragging = true;
+dragType = 'edge';
+dragTarget = target;
+}
+});
+
+canvas.addEventListener('mousemove', function(e) {
+let rect = canvas.getBoundingClientRect();
+let x = e.clientX - rect.left;
+let y = e.clientY - rect.top;
+
+if (x < canvasConfig.leftMargin || x > canvasConfig.leftMargin + canvasConfig.gridWidth || y < canvasConfig.topMargin) {
+tooltip.style.display = 'none';
+canvas.style.cursor = 'default';
+return;
+}
+
+let time = (x - canvasConfig.leftMargin) / (canvasConfig.gridWidth / 24);
+
+tooltip.style.display = 'block';
+tooltip.style.left = (e.pageX + 15) + 'px';
+tooltip.style.top = (e.pageY + 15) + 'px';
+tooltip.innerText = formatTime(time);
+
+if (isDragging) {
+let snappedTime = Math.round(time * 12) / 12; 
+if (snappedTime < 0) snappedTime = 0;
+if (snappedTime > 24) snappedTime = 24;
+
+if (dragType === 'edge' && dragTarget) {
+let ev = driverEvents[dragTarget.index];
+if (dragTarget.edge === 'start') {
+let minTime = dragTarget.index > 0 ? driverEvents[dragTarget.index - 1].endHour : 0;
+let maxTime = ev.endHour;
+ev.startHour = Math.max(minTime, Math.min(maxTime, snappedTime));
+} else {
+let minTime = ev.startHour;
+let maxTime = dragTarget.index < driverEvents.length - 1 ? driverEvents[dragTarget.index + 1].startHour : 24;
+ev.endHour = Math.max(minTime, Math.min(maxTime, snappedTime));
+}
+updateHoursFromEvents(); 
+} else if (dragType === 'marker' && dragTarget !== null) {
+remarksMarkers[dragTarget].time = snappedTime;
+}
+
+drawGridAndLine(); 
+canvas.style.cursor = 'ew-resize';
+return;
+}
+
+let cursor = 'default';
+if (y > canvasConfig.gridBottom) {
+let hoveringMarker = remarksMarkers.some(m => {
+let mx = canvasConfig.leftMargin + (m.time / 24) * canvasConfig.gridWidth;
+return x >= mx - 80 && x <= mx + 20 && y >= canvasConfig.remarksLineY;
+});
+cursor = hoveringMarker ? 'ew-resize' : 'pointer'; 
+} else {
+let target = getDragTarget(time, y);
+if (target) cursor = 'ew-resize';
+}
+canvas.style.cursor = cursor;
+});
+
+canvas.addEventListener('mouseup', function(e) {
+if (isDragging && dragType === 'marker') {
+let rect = canvas.getBoundingClientRect();
+let x = e.clientX - rect.left;
+
+if (Math.abs(x - startDragX) < 5) {
+if (confirm("Remove this city marker?")) {
+remarksMarkers.splice(dragTarget, 1);
+drawGridAndLine();
+}
+}
+}
+
+isDragging = false;
+dragType = null;
+dragTarget = null;
+});
+
+canvas.addEventListener('mouseleave', () => {
+isDragging = false;
+dragType = null;
+dragTarget = null;
+tooltip.style.display = 'none';
+});
+
+function checkWarnings() {
+const dateInput = document.getElementById('date');
+let d = new Date();
+let month = '' + (d.getMonth() + 1), day = '' + d.getDate(), year = d.getFullYear();
+if (month.length < 2) month = '0' + month;
+if (day.length < 2) day = '0' + day;
+let todayStr = [year, month, day].join('-');
+
+if (dateInput.value && dateInput.value !== todayStr) {
+dateInput.classList.add('warning-field');
+} else {
+dateInput.classList.remove('warning-field');
+}
+
+const miles = document.getElementById('totalMiles');
+if (!miles.value || parseFloat(miles.value) === 0) miles.classList.add('warning-field');
+else miles.classList.remove('warning-field');
+
+['empNum', 'dutyNum', 'vehicleNum'].forEach(id => {
+const el = document.getElementById(id);
+if (!el.value.trim()) el.classList.add('warning-field');
+else el.classList.remove('warning-field');
+});
+}
+
+document.getElementById('date').addEventListener('change', checkWarnings);
+
+function updateHoursFromEvents() {
+let hrsDrive = 0, hrsOn = 0;
+driverEvents.forEach(e => {
+let dur = e.endHour - e.startHour;
+if (e.status === 'DRIVE') hrsDrive += dur;
+if (e.status === 'ON') hrsOn += dur;
+});
+let hrsOff = 24.0 - hrsDrive - hrsOn;
+document.getElementById('hrsOffDuty').value = hrsOff.toFixed(2);
+document.getElementById('hrsDriving').value = hrsDrive.toFixed(2);
+document.getElementById('hrsOnDuty').value = hrsOn.toFixed(2);
+calculateTotal();
+}
+
+// --- Drag and Drop Logic ---
+const dropZone = document.getElementById('dropZone');
+
+dropZone.addEventListener('dragover', (e) => {
+e.preventDefault();
+dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', (e) => {
+e.preventDefault();
+dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+e.preventDefault();
+dropZone.classList.remove('drag-over');
+if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+processFile(e.dataTransfer.files[0]);
+}
+});
+
+document.getElementById('pdfUpload').addEventListener('change', function(event) {
+if (event.target.files && event.target.files.length > 0) {
+processFile(event.target.files[0]);
+}
+});
+
+function processFile(file) {
+if (file && file.type === "application/pdf") {
+let fileReader = new FileReader();
+fileReader.onload = function() {
+let typedarray = new Uint8Array(this.result);
+pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+return pdf.getPage(1).then(page => {
+return page.getTextContent();
+});
+}).then(textContent => {
+try {
+let textItems = textContent.items.map(item => item.str);
+parseDispatchDataSafariSafe(textItems);
+} catch (e) {
+alert("Error extracting data: " + e.message);
+console.error(e);
+}
+}).catch(err => {
+alert("Error reading PDF. Please ensure the file is valid.\n\nDetails: " + (err.message || err));
+console.error(err);
+});
+};
+fileReader.readAsArrayBuffer(file);
+} else {
+alert("Please upload a valid PDF document.");
+}
+}
+
+function parseDispatchDataSafariSafe(textItems) {
+let fullText = textItems.join(" ");
+let dateMatch = fullText.match(/Date:\s*(\d{4}\/\d{2}\/\d{2})/i);
+if (dateMatch) document.getElementById('date').value = dateMatch[1].replace(/\//g, '-');
+
+let dutyMatch = fullText.match(/Duty\s*#[^\d]*(\d+(?:\+\d+)?)/i);
+if (dutyMatch) document.getElementById('dutyNum').value = dutyMatch[1];
+
+let empMatch = fullText.match(/(\d{4})\s*-\s*([A-Za-z]+)\s+([A-Za-z]+)/);
+let empId = "";
+if (empMatch) {
+empId = empMatch[1];
+document.getElementById('empNum').value = empId;
+document.getElementById('driverName').value = empMatch[3] + " " + empMatch[2]; 
+}
+
+if (!empId) {
+alert("Could not locate driver information in the document.");
+return;
+}
+
+let rowSplitRegex = new RegExp("(?=" + empId + "\\b)", "g");
+let rows = fullText.split(rowSplitRegex);
+let totalMiles = 0.0;
+let vehicles = new Set();
+
+isGridManuallyCleared = false;
+driverEvents = [];
+
+function parseTime(timeStr) {
+let match = timeStr.match(/(\d{1,2})(\d{2})([ap])/);
+if (!match) return 0;
+let hrs = parseInt(match[1]);
+let mins = parseInt(match[2]);
+let isPm = match[3] === 'p';
+if (isPm && hrs !== 12) hrs += 12;
+if (!isPm && hrs === 12) hrs = 0;
+return hrs + (mins / 60);
+}
+
+rows.forEach(row => {
+let times = row.match(/(\d{1,2}\d{2}[ap])/g);
+if (!times || times.length < 2) return; 
+
+let start = times[0];
+let end = times[1];
+
+let beforeTime = row.split(start)[0];
+
+let possibleVehicles = beforeTime.match(/\b\d{4}\b/g);
+if (possibleVehicles) {
+possibleVehicles.forEach(num => {
+if (num === empId) return; 
+
+let afterNumRegex = new RegExp("\\b" + num + "\\s+(.*)");
+let afterMatch = beforeTime.match(afterNumRegex);
+if (afterMatch && afterMatch[1]) {
+let nextWord = afterMatch[1].trim().split(/\s+/)[0];
+let isLocation = /^[A-Z]{3,6}$/.test(nextWord);
+if (!isLocation) {
+vehicles.add(num);
+}
+} else {
+vehicles.add(num);
+}
+});
+}
+
+let lowerRow = row.toLowerCase();
+let status = "DRIVE"; 
+
+// STRICT RU matching: requires a hyphen to prevent matching timecodes like "CJW 542p"
+let isReliefUnit = /\b(tda|cjw|sco)\s*-\s*\d+\b/i.test(lowerRow);
+
+if (lowerRow.includes("unpaid")) {
+status = "OFF";
+} else if (
+lowerRow.includes("sign-on") || 
+lowerRow.includes("standby") || 
+lowerRow.includes("rest") || 
+lowerRow.includes("joinup") ||
+lowerRow.includes("prep in") ||
+lowerRow.includes("prep out") ||
+lowerRow.includes("travel") ||
+isReliefUnit
+) {
+status = "ON";
+} else {
+status = "DRIVE";
+}
+
+// Extract mileage if it is NOT a relief unit
+if (!isReliefUnit) {
+let milesMatch = row.match(/(\d+\.\d{3,4})/g);
+if (milesMatch) totalMiles += parseFloat(milesMatch[milesMatch.length - 1]);
+}
+
+let startDec = parseTime(start);
+let endDec = parseTime(end);
+let duration = endDec - startDec;
+if (duration < 0) duration += 24; 
+
+driverEvents.push({ status: status, startHour: startDec, endHour: endDec });
+});
+
+if (vehicles.size > 0) document.getElementById('vehicleNum').value = Array.from(vehicles).join(", ");
+
+// Use standard rounding to 1 decimal place to match typical UI requirements
+document.getElementById('totalMiles').value = totalMiles.toFixed(1); 
+
+updateHoursFromEvents(); 
+document.querySelectorAll('input[required]').forEach(el => el.style.borderColor = '#ccc');
+
+drawGridAndLine(); 
+checkWarnings(); 
+}
+
+function calculateTotal() {
+const off = parseFloat(document.getElementById('hrsOffDuty').value) || 0;
+const drive = parseFloat(document.getElementById('hrsDriving').value) || 0;
+const on = parseFloat(document.getElementById('hrsOnDuty').value) || 0;
+const total = off + drive + on;
+const totalInput = document.getElementById('hrsTotal');
+totalInput.value = total.toFixed(2);
+totalInput.style.color = Math.abs(total - 24.00) < 0.001 ? 'green' : 'red';
+}
+
+document.querySelectorAll('.hour-input').forEach(input => {
+input.addEventListener('input', calculateTotal);
+});
+
+document.querySelectorAll('input, select').forEach(input => {
+input.addEventListener('input', function() {
+if(this.checkValidity()) this.style.borderColor = '#ccc';
+if(this.value.trim() !== '' && this.id !== 'date') this.classList.remove('warning-field');
+});
+});
+
+document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => {
+cb.addEventListener('change', () => {
+document.getElementById('remarksContainer').style.borderColor = '#ccc';
+});
+});
+
+function validateAndPrint() {
+const requiredFields = document.querySelectorAll('input[required], select[required]');
+let allValid = true;
+requiredFields.forEach(field => {
+if (!field.value.trim() || !field.checkValidity()) {
+allValid = false;
+field.style.borderColor = 'red'; 
+} else {
+field.style.borderColor = '#ccc';
+}
+});
+
+const chkPassengers = document.getElementById('chkPassengers').checked;
+const chkStandby = document.getElementById('chkStandby').checked;
+const chkOther = document.getElementById('chkOther').checked;
+
+if (!chkPassengers && !chkStandby && !chkOther) {
+allValid = false;
+document.getElementById('remarksContainer').style.borderColor = 'red';
+}
+
+const hasCityMarkers = remarksMarkers.length > 0;
+
+if (!hasCityMarkers && !isGridManuallyCleared) {
+allValid = false;
+canvasWrapper.classList.add('warning-field');
+canvasWrapper.style.borderColor = 'red';
+canvasWrapper.style.backgroundColor = '#fff3cd';
+} else {
+canvasWrapper.classList.remove('warning-field');
+canvasWrapper.style.borderColor = '#333';
+canvasWrapper.style.backgroundColor = '#fff';
+}
+
+const totalInput = parseFloat(document.getElementById('hrsTotal').value) || 0;
+const hoursValid = Math.abs(totalInput - 24.00) < 0.001;
+
+if (!allValid) {
+alert('Please ensure all required fields are filled out, at least one Remarks option is selected, and at least one City/State marker is added to the grid (unless the grid was manually cleared).');
+return;
+}
+if (!hoursValid) {
+alert('Total hours must equal exactly 24.00 before printing.');
+return;
+}
+
+alert("Print two copies in Landscape view.\n\nOriginal filed each day at home terminal.\nDuplicate retained by driver for eight days.");
+window.print();
+}
+</script>
+
+</body>
+</html>  
