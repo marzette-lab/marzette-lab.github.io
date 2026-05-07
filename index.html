@@ -1,2 +1,227 @@
-Hello, World!
-<a href="https://marzette-lab.github.io/driverlog.html>FMCSA Transit Driver Log</a>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="FMCSA Digital Driver Log" />
+    <meta name="theme-color" content="#0056b3" />
+    <meta name="apple-mobile-web-app-title" content="MST">
+    <script type="module" src="../analytics.js"></script>
+    <link rel="icon" type="image/png" href="../images/favicons/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="../images/favicons/favicon.svg" sizes="any">
+    <link rel="shortcut icon" href="../images/favicons/favicon.svg" />
+    <link rel="apple-touch-icon" href="../images/favicons/apple-touch-icon.png" />
+    <link rel="manifest" href="../manifest.json" />
+
+    <title>FMCSA Driver Log - Monterey-Salinas Transit District</title>
+
+    <script src="pdf.min.js" defer></script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <a class="sr-only" href="#main-content">Skip to Main Content</a>
+    <div id="timeTooltip" class="no-print"></div>
+
+    <div id="cityContextMenu" class="no-print">
+      <button class="city-btn" id="btn-city-monterey">Monterey, CA</button>
+      <button class="city-btn" id="btn-city-salinas">Salinas, CA</button>
+      <button class="city-btn" id="btn-city-kingcity">King City, CA</button>
+      <button class="city-btn" id="btn-city-other">Other...</button>
+    </div>
+
+    <div id="videoModal" class="modal-overlay no-print">
+      <div class="modal-content" id="video-modal-content">
+        <button class="close-modal" id="btn-close-video" aria-label="Close Video Tutorial">&times;</button>
+        <h3 class="video-modal-title">How to use the Digital Driver Log</h3>
+        <div class="video-container">
+          <iframe src="https://mstorg-my.sharepoint.com/:v:/g/personal/mhenderson_mst_org/IQA3UhSkyWZjSLjMTl4fCv_EAV9-ZnaDlzM5oTTu-VxYcHM?e=xWeE8R&action=embedview" title="Tutorial Video" frameborder="0" allowfullscreen></iframe>
+        </div>
+      </div>
+    </div>
+
+    <div id="roundingModal" class="modal-overlay no-print">
+      <div class="modal-content rounding-guide-modal" id="rounding-modal-content">
+        <button class="close-modal" id="btn-close-rounding" aria-label="Close Rounding Guide">&times;</button>
+        <h3 class="rounding-guide-title">7.5-Minute Rounding Guide</h3>
+        <p style="text-align: center; font-size: 14px; margin-top: 10px; color: #333;">
+          All timeline interactions now snap to the nearest <strong>7.5-minute increment</strong> (halved 15-minute blocks). Use this guide if tracking manual entry.
+        </p>
+        <table class="rounding-guide-table">
+          <thead>
+            <tr class="rounding-table-header">
+              <th class="rounding-th-down">Actual Time</th>
+              <th class="rounding-th-up">Rounded Entry</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="rounding-td-down-1">:00 - :03 mins</td><td class="rounding-td-up-1">&rarr; <strong>:00</strong></td></tr>
+            <tr><td class="rounding-td-down-2">:04 - :11 mins</td><td class="rounding-td-up-2">&rarr; <strong>:08</strong></td></tr>
+            <tr><td class="rounding-td-down-3">:12 - :18 mins</td><td class="rounding-td-up-3">&rarr; <strong>:15</strong></td></tr>
+            <tr><td class="rounding-td-down-4">:19 - :26 mins</td><td class="rounding-td-up-4">&rarr; <strong>:23</strong></td></tr>
+            <tr><td class="rounding-td-down-1">:27 - :33 mins</td><td class="rounding-td-up-1">&rarr; <strong>:30</strong></td></tr>
+            <tr><td class="rounding-td-down-2">:34 - :41 mins</td><td class="rounding-td-up-2">&rarr; <strong>:38</strong></td></tr>
+            <tr><td class="rounding-td-down-3">:42 - :48 mins</td><td class="rounding-td-up-3">&rarr; <strong>:45</strong></td></tr>
+            <tr><td class="rounding-td-down-4">:49 - :56 mins</td><td class="rounding-td-up-4">&rarr; <strong>:53</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="manualEntryModal" class="modal-overlay no-print">
+      <div class="modal-content manual-entry-modal" id="manual-entry-modal-content">
+        <button class="close-modal" id="btn-close-manual" aria-label="Close Manual Entry">&times;</button>
+        <h3 class="manual-entry-title">Manual Log Entry</h3>
+        <div id="manualErrorMsg" style="color: #dc3545; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; font-size: 13px; font-weight: bold; text-align: center; margin-bottom: 15px; display: none;"></div>
+        
+        <div class="modal-section">
+          <h4 class="modal-section-title">Add Duty Hours</h4>
+          <div class="form-layout" style="margin-block-end: 15px">
+            <div class="form-group"><label for="manualStatus">Status</label><select id="manualStatus"><option value="OFF">OFF DUTY</option><option value="DRIVE">DRIVING</option><option value="ON">ON DUTY</option></select></div>
+            <div class="form-group"><label for="manualStart">Start Time</label><input type="time" id="manualStart" /></div>
+            <div class="form-group"><label for="manualEnd">End Time</label><input type="time" id="manualEnd" /></div>
+          </div>
+          <button type="button" class="btn btn-primary w-100" id="btn-manual-add">Add Duty Line to Grid</button>
+        </div>
+
+        <hr style="margin: 25px 0; border: none; border-block-start: 1px solid var(--border-color);" />
+
+        <div class="modal-section">
+          <h4 class="modal-section-title">Add City Remark</h4>
+          <div class="form-layout" style="margin-block-end: 15px">
+            <div class="form-group"><label for="manualRemarkTime">Time</label><input type="time" id="manualRemarkTime" /></div>
+            <div class="form-group"><label for="manualCity">City, State</label><input type="text" id="manualCity" placeholder="e.g., Monterey, CA" autocomplete="off" /></div>
+          </div>
+          <button type="button" class="btn btn-info w-100" id="btn-manual-remark-add">Add City Remark</button>
+        </div>
+      </div>
+    </div>
+
+    <main class="container" id="main-content">
+      <div id="globalErrorMsg" class="global-error no-print" style="display: none"></div>
+
+      <section class="actions no-print">
+        <div class="left-actions">
+          <a class="btn btn-primary btn-sm" href="../" aria-label="Back to Main Menu" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; margin-right: 5px;">Home</a>
+          <button class="btn btn-refresh btn-sm" type="button" title="Clear Form / Refresh" id="btn-toolbar-refresh">Refresh</button>
+          <button class="btn btn-warning btn-sm" type="button" title="Print log bypassing all missing information checks." id="btn-toolbar-print-exception">Print Exception</button>
+          <button class="btn btn-info btn-sm" type="button" title="Watch a quick tutorial on how to fill out this log." id="btn-toolbar-tutorial">🎥 Tutorial</button>
+        </div>
+
+        <div class="right-actions">
+          <div class="file-upload-wrapper hidden-element" id="dropZone">
+            <button class="btn btn-upload">Upload or Drag PDF</button>
+            <input type="file" id="pdfUpload" accept="application/pdf" aria-label="Upload PDF Log" />
+          </div>
+          <button class="btn btn-primary" type="button" title="Print two copies in Landscape view." id="btn-toolbar-print">Print Log</button>
+        </div>
+      </section>
+
+      <div class="print-reminder">⚠️ Please Print 2 Copies ⚠️</div>
+
+      <header class="top-header">
+        <div class="date-group"><label for="date">Date</label><input type="date" id="date" required /></div>
+        <div class="title-group"><h2>Driver's Daily Log</h2><div class="sub-title">(ONE CALENDAR DAY - 24 HOURS)</div></div>
+        <div class="carrier-info">
+          <div class="carrier-label">Carrier Name and Main Office Address:</div>
+          <div class="carrier-name">Monterey-Salinas Transit District</div>
+          <div class="carrier-address">19 Upper Ragsdale Drive, Suite 200, Monterey, CA 93940</div>
+        </div>
+      </header>
+
+      <section class="form-layout">
+        <div class="form-group"><label for="driverName">Driver Name</label><input type="text" id="driverName" placeholder="First & Last Name" autocomplete="off" required /></div>
+        <div class="form-group"><label for="empNum">Employee Number</label><input type="number" id="empNum" inputmode="numeric" placeholder="1000-9999" autocomplete="off" required /></div>
+        <div class="form-group"><label for="dutyNum">Duty Number</label><input type="text" id="dutyNum" autocomplete="off" required /></div>
+        <div class="form-group"><label for="vehicleNum">Vehicle Number(s)</label><input type="text" id="vehicleNum" placeholder="e.g., 2201, 1901" autocomplete="off" required /></div>
+        
+        <div class="form-group">
+          <label for="totalMiles" class="label-with-icon">
+            Total Miles Driven
+            <button type="button" id="btn-info-miles" class="no-print info-icon-btn" title="Do not include RU miles in your total." aria-label="Do not include RU miles in your total.">&#9432;</button>
+          </label>
+          <input type="text" id="totalMiles" inputmode="decimal" placeholder="e.g., 150 or 50+100" autocomplete="off" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="fromCity">From (Tap In City)</label>
+          <select id="fromCity" required>
+            <option value="" disabled selected>Select City...</option>
+            <option value="Monterey, CA">Monterey, CA</option>
+            <option value="Salinas, CA">Salinas, CA</option>
+            <option value="King City, CA">King City, CA</option>
+            <option value="Other">Other...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="toCity">To (Tap Out City)</label>
+          <select id="toCity" required>
+            <option value="" disabled selected>Select City...</option>
+            <option value="Monterey, CA">Monterey, CA</option>
+            <option value="Salinas, CA">Salinas, CA</option>
+            <option value="King City, CA">King City, CA</option>
+            <option value="Other">Other...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="homeTerminal">Home Terminal Address</label>
+          <select id="homeTerminal" required>
+            <option value="" disabled selected>Select Terminal...</option>
+            <option value="TDA">TDA / 1 Ryan Ranch Rd. Monterey, CA 93940</option>
+            <option value="CJW">CJW / 443 Victor Way, Salinas, CA 93907</option>
+            <option value="SCO">SCO / 179 San Antonio Dr., King City, CA 93930</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="log-section">
+        <div class="log-data-row">
+          <div class="canvas-wrapper" id="canvasWrapper"><canvas id="logGrid" width="820" height="300"></canvas></div>
+          <div class="hours-column">
+            <div class="hours-header hours-header-container">
+              Hours
+              <button type="button" class="no-print info-icon-btn" id="btn-info-rounding" aria-label="View Rounding Guide Info">&#9432;</button>
+            </div>
+            <div class="hours-inputs">
+              <div class="hour-cell"><label for="hrsOffDuty" class="hour-label no-print">OFF</label><input type="number" id="hrsOffDuty" class="hour-input" step="0.01" placeholder="0.00" readonly tabindex="-1" required /></div>
+              <div class="hour-cell"><label for="hrsDriving" class="hour-label no-print">DRV</label><input type="number" id="hrsDriving" class="hour-input" step="0.01" placeholder="0.00" readonly tabindex="-1" required /></div>
+              <div class="hour-cell"><label for="hrsOnDuty" class="hour-label no-print">ON</label><input type="number" id="hrsOnDuty" class="hour-input" step="0.01" placeholder="0.00" readonly tabindex="-1" required /></div>
+            </div>
+            <div class="hours-total-container">
+              <label for="hrsTotal">Total</label><input type="text" id="hrsTotal" value="0.00" readonly />
+            </div>
+          </div>
+        </div>
+
+        <div class="hours-actions no-print">
+          <button class="btn-manual no-print" type="button" id="btn-open-manual">Manual Entry</button>
+          <button class="btn-fill-off" type="button" id="btn-grid-fill-off">Fill OFF</button>
+          <button class="btn-clear-grid" type="button" id="btn-grid-clear">Clear Grid</button>
+        </div>
+      </section>
+
+      <footer class="bottom-row">
+        <div class="remarks-section" id="remarksContainer">
+          <span class="title">Remarks:</span>
+          <div class="checkbox-group"><input type="checkbox" id="chkPassengers" /><label for="chkPassengers">Passengers</label></div>
+          <div class="checkbox-group"><input type="checkbox" id="chkStandby" /><label for="chkStandby">Standby</label></div>
+          <div class="checkbox-group"><input type="checkbox" id="chkOther" /><label for="chkOther">Other</label><input type="text" id="otherText" placeholder="Please specify..." autocomplete="off" /></div>
+        </div>
+        <div class="signature-section print-only">
+          <div class="signature-line"></div>
+          <div class="signature-label" id="signatureLabel">Driver's Signature</div>
+          <div class="cert-label">I certify these entries are true and correct.</div>
+        </div>
+      </footer>
+
+      <div id="globalConfirmModal" class="modal-overlay no-print" style="display: none"><div class="modal-content" style="max-width: 400px; text-align: center"><h3 style="margin-top: 5px; color: var(--primary)">Confirm Action</h3><p id="globalConfirmText" style="margin-block: 20px; font-size: 16px; color: #333"></p><div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 5px;"><button type="button" class="btn btn-refresh" id="btn-confirm-cancel">Cancel</button><button type="button" class="btn btn-warning" id="btn-confirm-yes">Yes, Proceed</button></div></div></div>
+      <div id="globalPromptModal" class="modal-overlay no-print" style="display: none"><div class="modal-content" style="max-width: 400px; text-align: center"><h3 id="globalPromptTitle" style="margin-top: 5px; color: var(--primary)">Enter Value</h3><p id="globalPromptText" style="margin-block: 20px; font-size: 16px; color: #333"></p><input type="text" id="globalPromptInput" class="w-100" style="margin-bottom: 25px; padding: 12px; font-size: 16px; border-radius: 6px; border: 1px solid var(--border-color);" autocomplete="off" /><div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 5px;"><button type="button" class="btn btn-refresh" id="btn-prompt-cancel">Cancel</button><button type="button" class="btn btn-primary" id="btn-prompt-submit">Submit</button></div></div></div>
+    </main>
+
+    <script src="js/globals-utils.js" defer></script>
+    <script src="js/canvas.js" defer></script>
+    <script src="js/pdf-parser.js" defer></script>
+    <script src="js/ui-validation.js" defer></script>
+    <script src="js/main.js" defer></script>
+  </body>
+</html>
